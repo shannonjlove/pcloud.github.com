@@ -2,6 +2,8 @@
 
 This document provides instructions for setting up and running Wiki.js for the wiki.shannonjlove.cloud subdomain.
 
+> **Note for Future Deployments**: For production Linux deployments, consider migrating to **Podman Quadlet templates** instead of Docker Compose. Quadlet provides better systemd integration, rootless containers, and simpler management. See [DEPLOYMENT_NOTES.md](DEPLOYMENT_NOTES.md) for details.
+
 ## Prerequisites
 
 - Docker and Docker Compose installed

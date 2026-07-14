@@ -1,3 +1,10 @@
 _site/
 .sass-cache/
 .jekyll-metadata
+
+# Wiki.js
+.env
+.env.local
+ssl/
+wiki_data/
+docker_volumes/

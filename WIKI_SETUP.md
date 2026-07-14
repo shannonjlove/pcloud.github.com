@@ -52,12 +52,19 @@ sudo chown $USER:$USER ssl/*
 
 #### Step 2: Configure DNS
 
-Add an A record in your DNS provider (CloudFlare, GoDaddy, etc.):
+Add a DNS record in your DNS provider (CloudFlare, GoDaddy, etc.). Choose one of the following:
 
+**Option A: Using an A record (direct IP)**
 | Type | Name | Content |
 |------|------|---------|
 | A | wiki | Your server IP address |
-| CNAME | wiki | shannonjlove.cloud (alternative) |
+
+**Option B: Using a CNAME record (delegation)**
+| Type | Name | Content |
+|------|------|---------|
+| CNAME | wiki | your-domain.com |
+
+Note: You can only use one type of record per subdomain. Use an A record if pointing to a server IP, or a CNAME record if delegating to another domain.
 
 #### Step 3: Start Services with Nginx
 
@@ -78,7 +85,7 @@ cat > renew-ssl.sh << 'EOF'
 certbot renew --quiet
 cp /etc/letsencrypt/live/wiki.shannonjlove.cloud/fullchain.pem ssl/cert.pem
 cp /etc/letsencrypt/live/wiki.shannonjlove.cloud/privkey.pem ssl/key.pem
-docker-compose restart nginx
+docker-compose exec nginx nginx -s reload
 EOF
 
 chmod +x renew-ssl.sh

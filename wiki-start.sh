@@ -93,7 +93,7 @@ case $choice in
         echo ""
         read -p "Have you configured the DNS A record? (y/n): " dns_configured
 
-        if [ "$dns_configured" != "y" ] && [ "$dns_configured" != "Y" ]; then
+        if ! [[ "$dns_configured" =~ ^[Yy]$ ]]; then
             echo "❌ Please configure DNS first, then run this script again."
             exit 1
         fi

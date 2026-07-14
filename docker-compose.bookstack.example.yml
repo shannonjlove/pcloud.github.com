@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # MySQL/MariaDB Database
+  mysql:
+    image: mysql:8.0
+    container_name: bookstack_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_DATABASE:-bookstack}
+      MYSQL_USER: ${DB_USERNAME:-bookstack}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-bookstackpass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - bookstack_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # BookStack Application
+  bookstack:
+    image: solidnerd/bookstack:latest
+    container_name: bookstack_app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # Core Settings
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:-}
+      APP_URL: ${APP_URL:-https://bookstack.shannonjlove.cloud}
+
+      # Database
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-bookstack}
+      DB_USERNAME: ${DB_USERNAME:-bookstack}
+      DB_PASSWORD: ${DB_PASSWORD:-bookstackpass}
+
+      # Authentication
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrator}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+
+      # Session
+      SESSION_DRIVER: cookie
+      SESSION_SECURE: true
+      SESSION_HTTP_ONLY: true
+
+      # Mail (Optional)
+      MAIL_DRIVER: ${MAIL_DRIVER:-log}
+
+      # Cache
+      CACHE_DRIVER: file
+      QUEUE_DRIVER: sync
+    ports:
+      - "8080:80"
+    volumes:
+      - bookstack_uploads:/var/www/bookstack/storage/uploads
+      - bookstack_cache:/var/www/bookstack/bootstrap/cache
+    networks:
+      - bookstack_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      timeout: 20s
+      retries: 10
+
+  # Nginx Reverse Proxy (Optional but recommended)
+  nginx:
+    image: nginx:alpine
+    container_name: bookstack_nginx
+    restart: unless-stopped
+    depends_on:
+      bookstack:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - bookstack_uploads:/var/www/bookstack/storage/uploads:ro
+    networks:
+      - bookstack_network
+    environment:
+      BOOKSTACK_HOST: bookstack
+
+volumes:
+  mysql_data:
+    driver: local
+  bookstack_uploads:
+    driver: local
+  bookstack_cache:
+    driver: local
+
+networks:
+  bookstack_network:
+    driver: bridge
+
+# ============================================
+# Usage Instructions
+# ============================================
+# 1. Copy this file: cp docker-compose.bookstack.example.yml docker-compose.yml
+# 2. Copy .env template: cp .env.bookstack.example .env.bookstack
+# 3. Edit .env.bookstack with your settings
+# 4. Start services: docker-compose up -d
+# 5. Verify with: ./scripts/verify-bookstack.sh
+#
+# Accessing BookStack:
+# - HTTP: http://localhost:8080
+# - HTTPS: https://bookstack.shannonjlove.cloud (after nginx setup)
+#
+# Initial login uses ADMIN_EMAIL and ADMIN_PASSWORD from environment
+# ============================================

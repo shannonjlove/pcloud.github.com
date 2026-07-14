@@ -5,81 +5,96 @@ This is a Jekyll-based documentation site for pCloud SDKs.
 ## BookStack Integration
 
 ### Status
-BookStack instances are configured for documentation purposes but currently **not fully deployed**.
+BookStack **was fully deployed and operational** as of 2026-07-11, but is currently **offline/inaccessible** as of 2026-07-14.
 
-### Domains
-- **bookstack.shannonjlove.cloud** - Primary BookStack instance
-- **docs.shannonjlove.cloud** - Documentation alias
+**Action Required:** Services need to be restarted or proxy configuration needs to be restored.
 
-### Current Verification Results
+### Domains & Access
+- **Public Documentation:** `https://docs.shannonjlove.cloud` (via Nginx Proxy Manager)
+- **Admin Panel:** `http://100.115.66.75` (via Tailscale VPN only)
+- **Server SSH:** `ssh root@100.115.66.75` (via Tailscale)
+
+### Current Verification Results (2026-07-14)
 
 #### HTTP Connectivity
 - ✅ Both domains are reachable over HTTP (port 80)
-- ⚠️ Both return generic nginx/openresty default page on root path
-- ❌ No BookStack endpoints responding (404 on /api, /login, etc.)
+- ⚠️ Both return nginx default page instead of BookStack
+- ❌ BookStack endpoints not responding (404 from nginx, not BookStack app)
 
 #### HTTPS Connectivity  
-- ❌ TLS handshake failures on both domains
-  - bookstack.shannonjlove.cloud: "unrecognized name" error (SNI issue)
+- ❌ TLS handshake failures (certificate/SNI issues)
+  - bookstack.shannonjlove.cloud: "unrecognized name" error
   - docs.shannonjlove.cloud: Connection reset by peer
 
-### API Credentials
-Configured but **not yet functional**:
+#### Previous Status (2026-07-11) - Was Working
+- ✅ BookStack service running and healthy
+- ✅ Database connected with 120+ migrations complete
+- ✅ Health check returning: `{"database":true,"cache":true,"session":true}`
+- ✅ Public HTTP access working: `http://docs.shannonjlove.cloud`
+- ✅ Tailscale admin access working: `http://100.115.66.75`
+- ⏳ HTTPS needed Let's Encrypt certificate
+
+### API Credentials (Available)
 ```
 BOOKSTACK_URL='https://bookstack.shannonjlove.cloud'
 BOOKSTACK_TOKEN_ID='0GfibwREHLX4Li8eXoPrARcIkZJjs9n1'
 BOOKSTACK_TOKEN_SECRET='5UCfFgn4GlRIIl65VaGUF6Nr8i6s4JRi'
 ```
 
-### Setup Requirements
+### Current Deployment
 
-To make BookStack fully operational, the following steps are needed:
+**Infrastructure:**
+- **Container Runtime:** Podman (systemd Quadlet services)
+- **Reverse Proxy:** Nginx Proxy Manager (NPM container)
+- **Application:** BookStack (docker.io/linuxserver/bookstack:latest)
+- **Database:** MariaDB (in Podman container)
+- **Networks:** infra.network, bookstack.network
 
-1. **Deploy BookStack application**
-   - Install BookStack on the server hosting bookstack.shannonjlove.cloud
-   - Use Docker, direct installation, or container orchestration
-   - Ensure application is accessible at root path
+**Service Configuration Files:**
+- `/etc/bookstack/bookstack.env` - Environment variables
+- `/etc/containers/systemd/bookstack.container` - BookStack service
+- `/etc/containers/systemd/bookstack-db.container` - Database service
+- `/data/nginx/proxy_host/bookstack.conf` - Nginx reverse proxy (in NPM)
 
-2. **Configure HTTPS/SSL Certificates**
-   - Obtain valid SSL certificates for both domains
-   - Fix SNI configuration on the load balancer/reverse proxy
-   - Ensure proper certificate chain setup
+### Troubleshooting Required
 
-3. **Network Configuration**
-   - Update reverse proxy/nginx configuration to route requests to BookStack
-   - Configure proper upstream backend for both domains
-   - Enable gzip and other performance optimizations
-
-4. **Database Setup**
-   - Configure MariaDB/MySQL backend
-   - Set database credentials in BookStack environment
-   - Run migrations if needed
-
-5. **Environment Configuration**
-   - Set APP_KEY and other required environment variables
-   - Configure authentication settings
-   - Enable API token support
-
-### Testing
-
-To verify full deployment, run:
+**Step 1: Check Service Status**
 ```bash
-./scripts/verify-bookstack.sh
+ssh root@100.115.66.75
+systemctl status bookstack.service
+systemctl status bookstack-db.service
 ```
 
-Or manually test:
+**Step 2: Restart if Needed**
 ```bash
-# HTTP root path
-curl http://bookstack.shannonjlove.cloud/ | grep -i bookstack
-
-# HTTPS with valid certificate
-curl https://bookstack.shannonjlove.cloud/ 
-
-# API endpoint
-curl -H "Authorization: Token TOKEN_ID:TOKEN_SECRET" \
-  https://bookstack.shannonjlove.cloud/api/books
+# Restart in order: DB first, then app
+systemctl restart bookstack-db.service
+sleep 10
+systemctl restart bookstack.service
 ```
+
+**Step 3: Verify Health**
+```bash
+curl http://127.0.0.1:80/status
+# Should return: {"database":true,"cache":true,"session":true}
+```
+
+**Step 4: Test Public Access**
+```bash
+curl http://docs.shannonjlove.cloud
+# Should return BookStack homepage
+```
+
+### Documentation
+
+For complete setup information and troubleshooting:
+- **`BOOKSTACK_CURRENT_STATUS.md`** - Current issue diagnosis and restart procedures
+- **`BOOKSTACK_DEPLOYMENT.md`** - Original deployment guide
+- **`BookStack_Complete_Configuration_Guide.md`** - Full infrastructure details
+- **`BookStack_Quick_Reference.md`** - Command reference and common tasks
 
 ### Related Documentation
 - [BookStack Official Docs](https://www.bookstackapp.com/)
 - [BookStack API Documentation](https://demo.bookstackapp.com/api/docs)
+- [Nginx Proxy Manager Docs](https://nginxproxymanager.com/)
+- [Tailscale VPN](https://tailscale.com/)

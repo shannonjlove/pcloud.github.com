@@ -1,0 +1,334 @@
+version: '3.8'
+
+################################################################################
+# Docker Compose Configuration for Media Server Stack
+#
+# Services:
+#   - jellyfin: Open-source media server
+#   - jellyseerr: Media request management (optional)
+#   - prowlarr: Indexer manager (optional)
+#
+# Usage:
+#   docker-compose -f docker-compose-jellyfin.yml up -d
+#   docker-compose -f docker-compose-jellyfin.yml down
+#   docker-compose -f docker-compose-jellyfin.yml logs -f jellyfin
+#
+# Prerequisites:
+#   - Docker & Docker Compose installed
+#   - /path/to/jellyfin/config directory exists
+#   - /path/to/media directory exists
+#   - /tmp/jellyfin-transcode directory exists
+#
+################################################################################
+
+services:
+
+  ############################################################################
+  # Jellyfin - Media Server
+  # https://jellyfin.org/docs/general/installation/docker/
+  ############################################################################
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    hostname: jellyfin
+    restart: unless-stopped
+
+    # Resource limits (adjust based on your hardware)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+
+    # Environment variables
+    environment:
+      # User/Group IDs (match your host user for file permissions)
+      PUID: 1000
+      PGID: 1000
+      TZ: America/New_York
+
+      # Jellyfin-specific settings
+      JELLYFIN_PublishedServerUrl: http://192.168.1.100:8096
+      # Change to your actual server IP or domain
+
+      # Performance tuning
+      JELLYFIN_CACHE_DIR: /cache
+
+    # Port mappings
+    ports:
+      # HTTP interface
+      - "8096:8096/tcp"
+      # HTTPS interface (requires cert setup)
+      - "8920:8920/tcp"
+      # Service discovery (UPnP/DLNA)
+      - "1900:1900/udp"
+      - "7359:7359/udp"
+
+    # Volume mounts
+    volumes:
+      # Configuration directory (persistent)
+      - jellyfin-config:/config
+
+      # Media library (read-only recommended)
+      - /path/to/media:/media:ro
+
+      # Optional: Torbox downloads as library source
+      - /path/to/media/torrents:/torrents:ro
+
+      # Transcoding cache (temporary, performance optimization)
+      - /tmp/jellyfin-transcode:/cache
+
+      # Optional: Mount external backup for direct restore
+      # - /backup/drive/media:/backups:ro
+
+      # Optional: Mount rclone filesystem for cloud media
+      # - /mnt/idrive:/cloud:ro
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/System/Ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Network configuration
+    networks:
+      - media-network
+
+    # Device mappings for hardware acceleration
+    devices:
+      # For Intel QuickSync (if available)
+      # - /dev/dri:/dev/dri
+
+      # For NVIDIA GPU (requires nvidia-docker)
+      # Uncomment the runtime section below
+
+    # GPU support (uncomment if using NVIDIA)
+    # runtime: nvidia
+    # environment:
+    #   NVIDIA_VISIBLE_DEVICES: all
+
+  ############################################################################
+  # Jellyseerr (Optional) - Media Request Management
+  # https://docs.jellyseerr.io/en/latest/installation/docker
+  ############################################################################
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    hostname: jellyseerr
+    restart: unless-stopped
+    depends_on:
+      - jellyfin
+
+    environment:
+      LOG_LEVEL: info
+      TZ: America/New_York
+
+    ports:
+      - "5055:5055"
+
+    volumes:
+      - jellyseerr-config:/app/config
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      - media-network
+
+  ############################################################################
+  # Prowlarr (Optional) - Indexer Manager for Torbox Integration
+  # https://prowlarr.com/
+  ############################################################################
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    hostname: prowlarr
+    restart: unless-stopped
+
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: America/New_York
+
+    ports:
+      - "9696:9696"
+
+    volumes:
+      - prowlarr-config:/config
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    networks:
+      - media-network
+
+  ############################################################################
+  # Watchtower (Optional) - Automatic Container Updates
+  ############################################################################
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+
+    environment:
+      TZ: America/New_York
+      WATCHTOWER_SCHEDULE: "0 2 * * *"  # Check for updates daily at 2 AM
+      WATCHTOWER_CLEANUP: "true"         # Remove old images
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    networks:
+      - media-network
+
+################################################################################
+# Volumes (Persistent Data)
+################################################################################
+volumes:
+  jellyfin-config:
+    driver: local
+  jellyseerr-config:
+    driver: local
+  prowlarr-config:
+    driver: local
+
+################################################################################
+# Networks
+################################################################################
+networks:
+  media-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+################################################################################
+# CONFIGURATION NOTES
+################################################################################
+
+# 1. Before running, create the media directory:
+#    mkdir -p /path/to/media
+#    mkdir -p /tmp/jellyfin-transcode
+
+# 2. Set correct permissions:
+#    sudo chown -R 1000:1000 /path/to/media
+#    sudo chmod -R 755 /path/to/media
+
+# 3. Start the services:
+#    docker-compose -f docker-compose-jellyfin.yml up -d
+
+# 4. Access Jellyfin:
+#    - Web UI: http://localhost:8096
+#    - Initial setup: Follow wizard for library configuration
+#    - Add library paths matching your directory structure
+
+# 5. Configure Jellyfin Libraries:
+#    Settings → Library:
+#    - Add Media Library → Movies → /media/movies
+#    - Add Media Library → TV Shows → /media/tv
+#    - Add Media Library → Music → /media/music
+
+# 6. Hardware Acceleration Setup:
+#    For Intel Quick Sync or NVIDIA:
+#    Settings → Playback → Transcoding → Select encoder
+
+# 7. Enable Remote Access (careful with security!):
+#    Settings → Networking → Public HTTP Port: 8096
+#    Settings → Networking → Enable HTTPS
+#    Use reverse proxy (Nginx/Caddy) for external access
+
+# 8. Mount IDrive E2 for cloud media access:
+#    # First, setup rclone mount on host
+#    mkdir -p /mnt/idrive
+#    rclone mount idrive-e2:media-storage /mnt/idrive --daemon
+#
+#    # Then add volume to jellyfin service in docker-compose
+#    # - /mnt/idrive:/cloud:ro
+
+# 9. Backup configuration:
+#    # Backup jellyfin config
+#    docker-compose exec jellyfin tar czf /config/jellyfin-backup.tar.gz /config
+#    docker cp jellyfin:/config/jellyfin-backup.tar.gz ./
+
+# 10. Restore configuration:
+#     docker cp ./jellyfin-backup.tar.gz jellyfin:/config/
+#     docker-compose exec jellyfin tar xzf /config/jellyfin-backup.tar.gz -C /
+
+################################################################################
+# PERFORMANCE TUNING
+################################################################################
+
+# For high-performance setups:
+# 1. Use SSD for config: volumes: jellyfin-config:
+#    driver: local
+#    driver_opts:
+#      type: nfs
+#      o: addr=192.168.1.100,vers=4,soft,timeo=180,bg,tcp,rw
+#      device: ":/nfs/jellyfin"
+
+# 2. Enable read-only for media to prevent accidental changes:
+#    volumes: - /path/to/media:/media:ro
+
+# 3. Use tmpfs for cache (fast, temporary):
+#    tmpfs:
+#      - /cache
+
+# 4. Increase max open files:
+#    ulimits:
+#      nofile:
+#        soft: 65536
+#        hard: 65536
+
+################################################################################
+# SECURITY NOTES
+################################################################################
+
+# 1. Don't expose Jellyfin directly to the internet
+# 2. Use reverse proxy (Nginx, Caddy, Traefik) with TLS
+# 3. Enable authentication and strong passwords
+# 4. Restrict API access to local network
+# 5. Use separate user for Jellyfin (PUID/PGID not 0)
+# 6. Keep containers updated (Watchtower)
+# 7. Use firewall rules to limit access
+# 8. Enable logging and monitor access
+
+################################################################################
+# TROUBLESHOOTING
+################################################################################
+
+# View logs:
+#   docker-compose logs -f jellyfin
+
+# Restart service:
+#   docker-compose restart jellyfin
+
+# Enter container:
+#   docker exec -it jellyfin bash
+
+# Check disk space:
+#   docker exec jellyfin df -h
+
+# Rebuild cache:
+#   docker exec jellyfin rm -rf /config/cache
+
+# Update image:
+#   docker-compose pull
+#   docker-compose up -d

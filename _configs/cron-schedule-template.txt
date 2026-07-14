@@ -1,0 +1,147 @@
+# Crontab Schedule for Media Backup & Management
+#
+# Install with: crontab -e
+# Add these lines to automate your media management workflow
+#
+# Cron Format: minute hour day month day-of-week command
+# Example:     0     3    *   *    *              command (runs at 3:00 AM daily)
+
+# ============================================================================
+# BACKUP SCHEDULING
+# ============================================================================
+
+# Daily local backup at 3:00 AM (rsync to external drive)
+0 3 * * * /path/to/scripts/backup-media-automation.sh backup >> ~/.backup-media-logs/cron.log 2>&1
+
+# Weekly integrity check every Sunday at 4:00 AM
+0 4 * * 0 /path/to/scripts/backup-media-automation.sh verify >> ~/.backup-media-logs/cron.log 2>&1
+
+# ============================================================================
+# CLEANUP & MAINTENANCE
+# ============================================================================
+
+# Daily cleanup of old torrent files at 5:00 AM (removes files 7+ days old)
+0 5 * * * find /path/to/media/torrents -type f -mtime +7 -delete
+
+# Weekly cache cleanup every Monday at 2:00 AM
+0 2 * * 1 rm -rf ~/.cache/rclone ~/.cache/rclone-ng
+
+# Daily cleanup of temporary transcoding files at 6:00 AM
+0 6 * * * find /tmp/jellyfin-transcode -type f -mtime +1 -delete 2>/dev/null || true
+
+# ============================================================================
+# JELLYFIN MANAGEMENT
+# ============================================================================
+
+# Refresh Jellyfin libraries every 12 hours (6 AM and 6 PM)
+0 6,18 * * * curl -s -X POST http://localhost:8096/Library/Refresh
+
+# Scan Jellyfin libraries every day at 7 AM
+0 7 * * * curl -s -X POST http://localhost:8096/Library/ValidateMediaLibraries
+
+# Cleanup old Jellyfin logs weekly at 1 AM Monday
+0 1 * * 1 find ~/.local/share/jellyfin/logs -type f -mtime +30 -delete 2>/dev/null || true
+
+# ============================================================================
+# MONITORING & REPORTING
+# ============================================================================
+
+# Generate backup status report daily at 8:00 AM
+0 8 * * * /path/to/scripts/backup-media-automation.sh monitor > ~/.backup-media-logs/status-$(date +\%Y\%m\%d).txt 2>&1
+
+# Send backup status email weekly (optional - requires mail setup)
+# 0 9 * * 1 /path/to/scripts/send-backup-report.sh
+
+# ============================================================================
+# RCLONE OPERATIONS
+# ============================================================================
+
+# Advanced: bi-directional sync every 6 hours (use with caution!)
+# 0 */6 * * * rclone sync --backup-dir=/backup/conflicts /path/to/media idrive-e2:media-storage
+
+# Advanced: Check for changes and notify
+# 0 12 * * * rclone check /path/to/media idrive-e2:media-storage --one-way --differ /tmp/backup-changes.txt
+
+# ============================================================================
+# RSYNC OPERATIONS (Alternative to backup script)
+# ============================================================================
+
+# Alternative: Direct rsync without script (3:00 AM daily)
+# 0 3 * * * rsync -avz --delete --progress /path/to/media/ /backup/drive/media/ >> ~/.rsync.log 2>&1
+
+# Alternative: Weekly rsync to IDrive E2 (Sunday 4 AM)
+# 0 4 * * 0 rclone sync /path/to/media idrive-e2:media-storage --progress >> ~/.rclone.log 2>&1
+
+# ============================================================================
+# NOTES & BEST PRACTICES
+# ============================================================================
+
+# 1. Adjust paths to match your environment:
+#    - Replace /path/to/media with your actual media directory
+#    - Replace /path/to/scripts with your actual scripts directory
+#    - Replace ~/.backup-media-logs with your log directory
+
+# 2. Make backup script executable:
+#    chmod +x /path/to/scripts/backup-media-automation.sh
+
+# 3. Test cron jobs before scheduling:
+#    /path/to/scripts/backup-media-automation.sh backup
+
+# 4. Monitor cron logs:
+#    # macOS
+#    log stream --predicate 'process == "cron"' --level debug
+#
+#    # Linux
+#    tail -f /var/log/syslog | grep CRON
+
+# 5. Verify cron is running:
+#    ps aux | grep cron
+
+# 6. Email notifications (requires mail setup):
+#    Add this to any cron line to get failure notifications:
+#    MAILTO="your-email@example.com"
+
+# 7. Set environment variables in crontab:
+#    At the top of your crontab, before all jobs:
+#    MEDIA_PATH=/path/to/media
+#    BACKUP_PATH=/backup/drive/media
+#    RCLONE_PROFILE=idrive-e2
+#    PATH=/usr/local/bin:/usr/bin:/bin
+
+# ============================================================================
+# EXAMPLE: COMPLETE CRONTAB WITH ENVIRONMENT
+# ============================================================================
+
+# Add these at the TOP of your crontab:
+#
+# SHELL=/bin/bash
+# PATH=/usr/local/bin:/usr/bin:/bin
+# MAILTO=your-email@example.com
+# MEDIA_PATH=/path/to/media
+# BACKUP_PATH=/backup/drive/media
+# IDrive_REMOTE=idrive-e2:media-storage
+# RCLONE_PROFILE=idrive-e2
+#
+# Then add the backup jobs below
+
+# ============================================================================
+# TROUBLESHOOTING
+# ============================================================================
+
+# If jobs aren't running:
+# 1. Check permissions: chmod +x script.sh
+# 2. Verify full paths (don't use ~)
+# 3. Check cron logs: grep CRON /var/log/syslog
+# 4. Test the command directly in terminal
+# 5. Ensure cron daemon is running: service cron status
+
+# If IDrive E2 sync fails:
+# 1. Verify rclone config: rclone config
+# 2. Test connectivity: rclone lsd idrive-e2:
+# 3. Check network: ping s3.e2.wasabisys.com
+# 4. Review logs in ~/.backup-media-logs/
+
+# If Jellyfin refresh fails:
+# 1. Verify Jellyfin is running: curl http://localhost:8096/System/Ping
+# 2. Check Jellyfin logs: tail -f ~/.local/share/jellyfin/logs/
+# 3. Ensure API is accessible locally

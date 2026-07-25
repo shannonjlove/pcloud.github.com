@@ -34,10 +34,12 @@
 # ============================================================================
 
 # Refresh Jellyfin libraries every 12 hours (6 AM and 6 PM)
-0 6,18 * * * curl -s -X POST http://localhost:8096/Library/Refresh
+# Note: Replace YOUR_JELLYFIN_API_KEY with actual API key from Jellyfin Settings → Dashboard
+0 6,18 * * * curl -s -X POST "http://localhost:8096/Library/Refresh?api_key=YOUR_JELLYFIN_API_KEY"
 
 # Scan Jellyfin libraries every day at 7 AM
-0 7 * * * curl -s -X POST http://localhost:8096/Library/ValidateMediaLibraries
+# Note: Replace YOUR_JELLYFIN_API_KEY with actual API key from Jellyfin Settings → Dashboard
+0 7 * * * curl -s -X POST "http://localhost:8096/Library/ValidateMediaLibraries?api_key=YOUR_JELLYFIN_API_KEY"
 
 # Cleanup old Jellyfin logs weekly at 1 AM Monday
 0 1 * * 1 find ~/.local/share/jellyfin/logs -type f -mtime +30 -delete 2>/dev/null || true

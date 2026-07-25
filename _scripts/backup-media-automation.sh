@@ -190,7 +190,7 @@ verify_backup() {
 
     # Check IDrive E2 size
     log "Querying IDrive E2 storage..."
-    local cloud_size=$(rclone du "$IDrive_REMOTE" 2>/dev/null | tail -1 | awk '{print $1}')
+    local cloud_size=$(rclone du "$IDrive_REMOTE" 2>/dev/null | grep -i "Total size:" | awk '{print $NF}' | head -c -2)
     if [ -n "$cloud_size" ]; then
         log "IDrive E2 usage: $(numfmt --to=iec $cloud_size 2>/dev/null || echo "$cloud_size bytes")"
     fi
@@ -267,14 +267,19 @@ monitor_status() {
     echo "IDrive E2 Remote:"
     if rclone lsd "$RCLONE_PROFILE:" &>/dev/null; then
         echo "  Status: Connected"
-        echo "  Size: $(rclone du "$IDrive_REMOTE" 2>/dev/null | tail -1 | awk '{print $1}')"
+        echo "  Size: $(rclone size "$IDrive_REMOTE" 2>/dev/null | grep -i "Total size:" | sed 's/Total size: //')"
     else
         echo "  Status: Disconnected"
     fi
 
     echo ""
     echo "Recent Logs:"
-    tail -10 "$LOG_FILE"
+    local latest_log=$(ls -t "$LOG_DIR"/backup-*.log 2>/dev/null | head -n 1)
+    if [ -n "$latest_log" ]; then
+        tail -10 "$latest_log"
+    else
+        echo "No backup logs found."
+    fi
 
     echo ""
     echo "Last Backups:"
@@ -293,10 +298,10 @@ restore_from_backup() {
     local destination="${2:-$MEDIA_PATH}"
 
     warning "This will restore files from $source to $destination"
-    read -p "Continue? (yes/no) " -n 3 -r
+    read -p "Continue? (y/N) " -r
     echo
 
-    if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ $REPLY =~ ^[Yy]([Ee][Ss])?$ ]]; then
         log "Restoring from $source to $destination"
 
         rsync -avz \
@@ -319,10 +324,10 @@ restore_from_cloud() {
     local destination="${1:-$MEDIA_PATH}"
 
     warning "This will restore files from $IDrive_REMOTE to $destination"
-    read -p "Continue? (yes/no) " -n 3 -r
+    read -p "Continue? (y/N) " -r
     echo
 
-    if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    if [[ $REPLY =~ ^[Yy]([Ee][Ss])?$ ]]; then
         log "Restoring from cloud to $destination"
 
         rclone sync \
@@ -417,7 +422,7 @@ main() {
             monitor_status
             ;;
         restore)
-            restore_from_backup "$2"
+            restore_from_backup "$2" "$3"
             ;;
         restore-cloud)
             restore_from_cloud "$2"
